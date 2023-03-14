@@ -22,7 +22,7 @@ pipeline {
                 script: 'echo ${GIT_BRANCH#origin/}'
             ).trim()}"""
     last_started_build_stage = ""   
-    IMAGE_NAME="${DOCKER_REPO_BASE_URL}/${DOCKER_REPO_NAME}/${DEPLOYMENT_STAGE}"
+    IMAGE_NAME="${DOCKER_REPO_BASE_URL}/${DOCKER_REPO_NAME}/stg"
     def BUILD_DATE = sh(script: "echo `date +%d_%m_%Y`", returnStdout: true).trim();
     def scannerHome = tool 'SonarqubeScanner';
   }
