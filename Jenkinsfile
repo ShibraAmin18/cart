@@ -1,3 +1,8 @@
+def COLOR_MAP = [
+    'SUCCESS': 'good',
+    'FAILURE': 'danger',
+]
+
 pipeline {
   environment {
     doError = '0'
@@ -28,9 +33,9 @@ pipeline {
 
   agent {
     kubernetes {
-      label 'jenkinsrun'
-      defaultContainer 'dind'
-      yaml '''
+        label 'jenkinsrun'
+        defaultContainer 'dind'
+        yaml """
           apiVersion: v1
           kind: Pod
           spec:
@@ -45,18 +50,19 @@ pipeline {
             volumes:
               - name: dind-storage
                 emptyDir: {}
-        '''
-    }
-
-  }
+        """
+        }
+      }
+  
   stages {
-    stage('Static code Analysis') {
+    stage ('Static code Analysis') {
       steps {
-        script {
-          sh '''
-echo "NodejsScan"
-nodejsscan --directory `pwd`
-'''
+// NodeJS Scan
+        script { 
+            sh '''
+            echo "NodejsScan"
+            nodejsscan --directory `pwd`
+            '''
         }
 // Sonarqube Analysis
         withSonarQubeEnv ('SonarqubeScanner') {
@@ -70,23 +76,22 @@ nodejsscan --directory `pwd`
           waitForQualityGate abortPipeline: true
        }
 // git-secret scan
-//         script { 
-//             sh '''
-//             echo 'git secret scanning'
-//             git config --global --add safe.directory /home/jenkins/agent/workspace/${DOCKER_REPO_NAME}
-//             git secrets --register-aws
-//             git-secrets --scan
-//             '''
-//         }
-
+        script { 
+            sh '''
+            echo 'git secret scanning'
+            git config --global --add safe.directory /home/jenkins/agent/workspace/${DOCKER_REPO_NAME}
+            git secrets --register-aws
+            git-secrets --scan
+            '''
+        }
       }
-    }
+     }
 
-    stage('Build Docker Image') {
+    stage('Build Docker Image') {   
       agent {
         kubernetes {
           label 'kaniko'
-          yaml '''
+          yaml """
           apiVersion: v1
           kind: Pod
           metadata:
@@ -99,74 +104,64 @@ nodejsscan --directory `pwd`
               command:
               - /busybox/cat
               tty: true 
-          '''
+          """
         }
-
-      }
+      }  
       steps {
-        container(name: 'kaniko') {
-          script {
-            last_started = env.STAGE_NAME
-            echo 'Build start'
-            sh '''/kaniko/executor --dockerfile Dockerfile  --context=`pwd` --destination=${IMAGE_NAME}:${BUILD_NUMBER}-${BUILD_DATE} --no-push --oci-layout-path `pwd`/build/ --tarPath `pwd`/build/${DOCKER_REPO_NAME}-${BUILD_NUMBER}.tar
-'''
-          }
-
-          stash(includes: 'build/*.tar', name: 'image')
+       container('kaniko'){
+            script {
+              last_started = env.STAGE_NAME
+              echo 'Build start'              
+              sh '''/kaniko/executor --dockerfile Dockerfile  --context=`pwd` --destination=${IMAGE_NAME}:${BUILD_NUMBER}-${BUILD_DATE} --no-push --oci-layout-path `pwd`/build/ --tarPath `pwd`/build/${DOCKER_REPO_NAME}-${BUILD_NUMBER}.tar
+              '''               
+            }   
+            stash includes: 'build/*.tar', name: 'image'          
         }
-
       }
     }
-
     stage('Scan Docker Image') {
       agent {
-        kubernetes {
-          containerTemplate {
-            name 'trivy'
-            image 'aquasec/trivy:0.35.0'
-            command 'sleep'
-            args 'infinity'
-          }
-
+        kubernetes {           
+            containerTemplate {
+              name 'trivy'
+              image 'aquasec/trivy:0.35.0'
+              command 'sleep'
+              args 'infinity'
+            }
         }
-
       }
-      options {
-        skipDefaultCheckout()
-      }
+      options { skipDefaultCheckout() }
       steps {
-        container(name: 'trivy') {
-          script {
-            last_started = env.STAGE_NAME
-            echo 'Scan with trivy'
-            unstash 'image'
-            sh '''
-apk add jq
-trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_REPO_NAME}-${BUILD_NUMBER}.tar
-'''
-            echo 'archive scan report'
-            archiveArtifacts artifacts: 'scan-report.json'
-            echo 'Docker Image Vulnerability Scanning'
-            high = sh (
-              script: 'cat scan-report.json | jq .Results[].Vulnerabilities[].Severity | grep HIGH | wc -l',
-              returnStdout: true
-            ).trim()
-            echo "High: ${high}"
-
-            critical = sh (
-              script: 'cat scan-report.json | jq .Results[].Vulnerabilities[].Severity | grep CRITICAL | wc -l',
-              returnStdout: true
-            ).trim()
-            echo "Critical: ${critical}"
-          }
-
-        }
-
-      }
-    }
+        container('trivy') {
+           script {
+              last_started = env.STAGE_NAME
+              echo 'Scan with trivy'    
+              unstash 'image'          
+              sh '''
+              apk add jq
+              trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_REPO_NAME}-${BUILD_NUMBER}.tar
+              '''
+              echo 'archive scan report'
+              archiveArtifacts artifacts: 'scan-report.json'
+              echo 'Docker Image Vulnerability Scanning'
+              high = sh (
+                   script: 'cat scan-report.json | jq .Results[].Vulnerabilities[].Severity | grep HIGH | wc -l',
+                   returnStdout: true
+              ).trim()
+              echo "High: ${high}"
+             
+             critical = sh (
+                  script: 'cat scan-report.json | jq .Results[].Vulnerabilities[].Severity | grep CRITICAL | wc -l',
+                   returnStdout: true
+              ).trim()
+              echo "Critical: ${critical}"
+           }
+         }
+      } 
+    }    
 
     stage('Push to ECR') {
-       when {
+      when {
                 branch 'master'
             }
        agent {
@@ -184,39 +179,35 @@ trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_
               command:
               - /busybox/cat
               tty: true 
-          '''
-        }
-
-      }
-      steps {
-        container(name: 'kaniko') {
-          script {
-            echo 'push to ecr step start'
-            if ( "$high" < 500 && "$critical" < 80 ) {
-              withAWS(credentials: 'jenkins-demo-aws') {
-                sh '''
-/kaniko/executor --dockerfile Dockerfile  --context=`pwd` --destination=${IMAGE_NAME}:${BUILD_NUMBER}-${BUILD_DATE}
-'''
-              }
+          """  
             }
-            else {
-              echo "The Image can't be pushed due to too many vulnerbilities"
-              exit
-            }
-          }
-
         }
-
+      //  options { skipDefaultCheckout() }
+       steps {        
+         container('kaniko') {
+           script {
+              echo 'push to ecr step start'
+              if ( "$high" < 500 && "$critical" < 80 ) {
+                withAWS(credentials: 'jenkins-demo-aws') {  
+                sh '''                                   
+                /kaniko/executor --dockerfile Dockerfile  --context=`pwd` --destination=${IMAGE_NAME}:${BUILD_NUMBER}-${BUILD_DATE}
+                '''               
+                }   
+              } 
+              else {
+                echo "The Image can't be pushed due to too many vulnerbilities"
+                exit
+              }                                    
+            }
+	        }
+        }
       }
-    }
-
-  
  
      stage('Asking for Deploy in prod') {
-//               when {
-//                  equals(actual: env.gitlabBranch , expected: "prod")
-//              }
-	     when {
+            //   when {
+            //      equals(actual: env.gitlabBranch , expected: "prod")
+            //  }
+            when {
                 branch 'master'
             }
              steps {
@@ -225,7 +216,7 @@ trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_
          }
  
      stage('Deploy') {
-	     when {
+      when {
                 branch 'master'
             }
        steps {    
@@ -250,21 +241,14 @@ trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_
    }
      }
   }
-  }
 
-
-
-      post {
+  post {
         failure {
-          slackSend(message: 'Pipeline for '+env.JOB_NAME+' with Build Id - '+env.BUILD_ID+' Failed at - '+env.last_started)
+            slackSend message: 'Pipeline for ' + env.JOB_NAME + ' with Build Id - ' +  env.BUILD_ID + ' Failed at - ' +  env.last_started
         }
 
         success {
-          slackSend(message: 'Pipeline for '+env.JOB_NAME+' with Build Id - '+env.BUILD_ID+' SUCCESSFUL')
+            slackSend message: 'Pipeline for ' + env.JOB_NAME + ' with Build Id - ' +  env.BUILD_ID + ' SUCCESSFUL'
         }
-
-      }
-      options {
-        buildDiscarder(logRotator(numToKeepStr: '20'))
-      }
     }
+}
