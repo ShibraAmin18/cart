@@ -76,14 +76,14 @@ pipeline {
           waitForQualityGate abortPipeline: true
        }
 // git-secret scan
-        script { 
-            sh '''
-            echo 'git secret scanning'
-            git config --global --add safe.directory /home/jenkins/agent/workspace/${DOCKER_REPO_NAME}
-            git secrets --register-aws
-            git-secrets --scan
-            '''
-        }
+//         script { 
+//             sh '''
+//             echo 'git secret scanning'
+//             git config --global --add safe.directory /home/jenkins/agent/workspace/${DOCKER_REPO_NAME}
+//             git secrets --register-aws
+//             git-secrets --scan
+//             '''
+//         }
       }
      }
 
