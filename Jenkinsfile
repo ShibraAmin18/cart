@@ -210,38 +210,7 @@ trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_
       }
     }
 
-    stage('Asking for Deploy in prod') {
-      when {
-        equals actual: env.gitlabBranch, expected: 'prod'
-      }
-      steps {
-        input 'Do you want to Deploy in Production?'
-      }
-    }
-
-    stage('Deploy') {
-      steps {
-        container(name: 'dind') {
-          script {
-            withCredentials([gitUsernamePassword(credentialsId: 'jenkins-demo', gitToolName: 'Default')]) {
-              last_started = env.STAGE_NAME
-              sh '''
-git clone -b $HELM_CHART_GIT_BRANCH $HELM_CHART_GIT_REPO_URL
-git config --global user.email $GIT_USER_EMAIL
-git config --global user.name $GIT_USER_NAME
-cd helm
-yq e -i '(."'${DOCKER_REPO_NAME}'".image.repository = "'${DOCKER_REPO_BASE_URL}'/'${DOCKER_REPO_NAME}'/'${DEPLOYMENT_STAGE}'")' env/${DEPLOYMENT_STAGE}/values.yaml
-yq e -i '(."'${DOCKER_REPO_NAME}'".image.tag = "'${BUILD_NUMBER}-${BUILD_DATE}'")' env/${DEPLOYMENT_STAGE}/values.yaml
-git add .
-git commit -m 'Docker Image version Update "'$JOB_NAME'"-"'$BUILD_NUMBER-$BUILD_DATE'"'
-git push origin $HELM_CHART_GIT_BRANCH
-'''
-            }
-          }
-
-        }
-
-      }
+  
  
      stage('Asking for Deploy in prod') {
 //               when {
@@ -282,28 +251,7 @@ git push origin $HELM_CHART_GIT_BRANCH
      }
   }
   }
-  environment {
-    doError = '0'
-    AWS_ACCOUNT_ID = 271251951598
-    AWS_REGION = 'us-east-2'
-    DOCKER_REPO_BASE_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-    DOCKER_REPO_NAME = """${sh(
-                      returnStdout: true,
-                      script: 'basename=$(basename $GIT_URL) && echo ${basename%.*}'
-                  ).trim()}"""
-      HELM_CHART_GIT_REPO_URL = 'https://gitlab.com/sq-ia/ref/msa-app/helm.git'
-      HELM_CHART_GIT_BRANCH = 'qa'
-      GIT_USER_EMAIL = 'pipelines@squareops.com'
-      GIT_USER_NAME = 'squareops'
-      DEPLOYMENT_STAGE = """${sh(
-                        returnStdout: true,
-                        script: 'echo ${GIT_BRANCH#origin/}'
-                    ).trim()}"""
-        last_started_build_stage = ''
-        IMAGE_NAME = "${DOCKER_REPO_BASE_URL}/${DOCKER_REPO_NAME}/${DEPLOYMENT_STAGE}"
-        BUILD_DATE = sh(script: "echo `date +%d_%m_%Y`", returnStdout: true).trim()
-        scannerHome = 'SonarqubeScanner'
-      }
+
       post {
         failure {
           slackSend(message: 'Pipeline for '+env.JOB_NAME+' with Build Id - '+env.BUILD_ID+' Failed at - '+env.last_started)
