@@ -252,6 +252,8 @@ trivy image --ignore-unfixed -f json -o scan-report.json --input build/${DOCKER_
   }
   }
 
+
+
       post {
         failure {
           slackSend(message: 'Pipeline for '+env.JOB_NAME+' with Build Id - '+env.BUILD_ID+' Failed at - '+env.last_started)
