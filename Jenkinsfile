@@ -3,6 +3,8 @@ def COLOR_MAP = [
     'FAILURE': 'danger',
 ]
 
+
+
 pipeline {
   environment {
     doError = '0'
