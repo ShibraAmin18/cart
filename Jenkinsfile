@@ -161,6 +161,9 @@ pipeline {
     }    
 
     stage('Push to ECR') {
+       when {
+                branch 'master'
+            }
        agent {
           kubernetes { 
           yaml """
@@ -201,15 +204,21 @@ pipeline {
       }
  
      stage('Asking for Deploy in prod') {
-              when {
-                 equals(actual: env.gitlabBranch , expected: "prod")
-             }
+//               when {
+//                  equals(actual: env.gitlabBranch , expected: "prod")
+//              }
+	     when {
+                branch 'master'
+            }
              steps {
                  input "Do you want to Deploy in Production?"
              }
          }
  
      stage('Deploy') {
+	     when {
+                branch 'master'
+            }
        steps {    
           container('dind') {
             script {
