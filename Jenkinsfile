@@ -122,6 +122,12 @@ pipeline {
       }
     }
     stage('Scan Docker Image') {
+      when {		
+	    anyOf {
+                        branch 'master';
+                        branch 'develop'
+	    }            
+	   }
       agent {
         kubernetes {           
             containerTemplate {
@@ -164,7 +170,7 @@ pipeline {
 
     stage('Push to ECR') {
       when {
-                branch 'master'
+                branch 'main'
             }
        agent {
           kubernetes { 
@@ -210,7 +216,7 @@ pipeline {
             //      equals(actual: env.gitlabBranch , expected: "prod")
             //  }
             when {
-                branch 'master'
+                branch 'main'
             }
              steps {
                  input "Do you want to Deploy in Production?"
@@ -219,7 +225,7 @@ pipeline {
  
      stage('Deploy') {
       when {
-                branch 'master'
+                branch 'main'
             }
        steps {    
           container('dind') {
