@@ -3,6 +3,8 @@ def COLOR_MAP = [
     'FAILURE': 'danger',
 ]
 
+
+
 pipeline {
   environment {
     doError = '0'
@@ -68,7 +70,7 @@ pipeline {
         withSonarQubeEnv ('SonarqubeScanner') {
             sh 'echo SonarQube Analysis'
             sh 'echo ${scannerHome}'
-            sh '${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=${DOCKER_REPO_NAME}'
+		sh '${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=${DOCKER_REPO_NAME}-${DEPLOYMENT_STAGE} -Dsonar.qualitygate=test'
          }
 // Sonarqube Quality Gate
          sh 'echo SonarQube Quality gate'
@@ -120,6 +122,12 @@ pipeline {
       }
     }
     stage('Scan Docker Image') {
+      when {		
+	    anyOf {
+                        branch 'main';
+                        branch 'development'
+	    }            
+	   }
       agent {
         kubernetes {           
             containerTemplate {
@@ -162,7 +170,7 @@ pipeline {
 
     stage('Push to ECR') {
       when {
-                branch 'master'
+                branch 'main'
             }
        agent {
           kubernetes { 
@@ -208,7 +216,7 @@ pipeline {
             //      equals(actual: env.gitlabBranch , expected: "prod")
             //  }
             when {
-                branch 'master'
+                branch 'main'
             }
              steps {
                  input "Do you want to Deploy in Production?"
@@ -217,7 +225,7 @@ pipeline {
  
      stage('Deploy') {
       when {
-                branch 'master'
+                branch 'main'
             }
        steps {    
           container('dind') {
