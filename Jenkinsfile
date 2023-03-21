@@ -90,6 +90,12 @@ pipeline {
      }
 
     stage('Build Docker Image') {   
+      when {		
+	    anyOf {
+                        branch 'main';
+                        branch 'development'
+	    }            
+	   }
       agent {
         kubernetes {
           label 'kaniko'
