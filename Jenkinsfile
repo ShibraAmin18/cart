@@ -124,8 +124,8 @@ pipeline {
     stage('Scan Docker Image') {
       when {		
 	    anyOf {
-                        branch 'master';
-                        branch 'develop'
+                        branch 'main';
+                        branch 'development'
 	    }            
 	   }
       agent {
